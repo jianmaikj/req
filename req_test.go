@@ -13,15 +13,20 @@ func Test(t *testing.T) {
 			"q1": 1,
 			"q2": 2,
 		},
-		Json: map[string]interface{}{
+		Data: map[string]interface{}{
 			"data1": 1,
 			"data2": 2,
 		},
 	}
+
+	//client.Data = map[string]interface{}{
+	//	"data1": 1,
+	//	"data2": 2,
+	//}
 	url := "https://baidu.com"
-	res, err := client.GET(url)
+	res, err := client.POST(url)
 	if err != nil {
 		return
 	}
-	fmt.Println(res.Body)
+	fmt.Println(res.String())
 }
