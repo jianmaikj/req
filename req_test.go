@@ -3,9 +3,12 @@ package req
 import (
 	"fmt"
 	"testing"
+	"time"
 )
 
 func Test(t *testing.T) {
+	//修改默认配置
+	DefaultConfig.IsLog = true
 
 	client := NewClient()
 	client.Config = Config{
@@ -17,6 +20,7 @@ func Test(t *testing.T) {
 			"data1": 1,
 			"data2": 2,
 		},
+		Timeout: 30 * time.Second,
 	}
 
 	//client.Data = map[string]interface{}{

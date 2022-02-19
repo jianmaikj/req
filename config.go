@@ -3,6 +3,7 @@ package req
 import (
 	"encoding/json"
 	"errors"
+	"log"
 )
 
 type GlobalConfig struct {
@@ -15,7 +16,7 @@ type GlobalConfig struct {
 
 var DefaultConfig = &GlobalConfig{
 	IsLog:       false,
-	LogHandler:  nil,
+	LogHandler:  func(uri string, payload []byte, res Response, err error) { log.Println("status:", res.Status, "url:", uri, "payload:", string(payload), "resp:", res.String(), "err:", err) },
 	NotOkError:  errors.New("request not success"),
 	JSONEncoder: json.Marshal,
 	JSONDecoder: json.Unmarshal,

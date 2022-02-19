@@ -2,7 +2,9 @@ package req
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/valyala/fasthttp"
+	"time"
 )
 
 type Body []byte
@@ -21,6 +23,7 @@ type Config struct {
 	Data    interface{}
 	Json    json.RawMessage
 	Headers map[string]string
+	Timeout time.Duration
 }
 
 type Response struct {
@@ -41,12 +44,10 @@ func (c *Client) NewReq(url string, method string) *fasthttp.Request {
 	req := fasthttp.AcquireRequest()
 	req.Header.SetMethod(method)
 	params := c.Config.Params
-	uri := url
+	req.SetRequestURI(url)
 	if params != nil {
-		queryString := GetQueryString(params)
-		uri = uri + "?" + string(queryString)
+		AddQueryArgs(req, params)
 	}
-	req.SetRequestURI(uri)
 	if c.BasicAuth != nil {
 		req.URI().SetUsername(c.BasicAuth.Username)
 		req.URI().SetPassword(c.BasicAuth.Password)
@@ -113,7 +114,7 @@ func (c *Client) GET(url string) (res Response, err error) {
 	if DefaultConfig.IsLog {
 		defer Log(req.URI().String(), []byte(``), res, err)
 	}
-	if err = fasthttp.Do(req, resp); err != nil {
+	if err = do(req, resp, c.Timeout); err != nil {
 		return
 	}
 
@@ -131,9 +132,6 @@ func (c *Client) POST(url string) (res Response, err error) {
 	defer fasthttp.ReleaseRequest(req)
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseResponse(resp) // 用完需要释放资源
-	if DefaultConfig.IsLog {
-		defer Log(req.URI().String(), []byte(``), res, err)
-	}
 	form := c.Form
 	data := c.Data
 	var payload []byte
@@ -148,10 +146,12 @@ func (c *Client) POST(url string) (res Response, err error) {
 	}
 	req.Header.SetContentType(contentType)
 	req.SetBody(payload)
-	if err := fasthttp.Do(req, resp); err != nil {
-		return Response{}, err
+	if DefaultConfig.IsLog {
+		defer Log(req.URI().String(), payload, res, err)
 	}
-
+	if err = do(req, resp, c.Timeout); err != nil {
+		return
+	}
 	body := resp.Body()
 	status := resp.StatusCode()
 	res = Response{
@@ -166,9 +166,6 @@ func (c *Client) PATCH(url string) (res Response, err error) {
 	defer fasthttp.ReleaseRequest(req)
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseResponse(resp) // 用完需要释放资源
-	if DefaultConfig.IsLog {
-		defer Log(req.URI().String(), []byte(``), res, err)
-	}
 	data := c.Data
 	var payload []byte
 	contentType := "application/json"
@@ -179,10 +176,12 @@ func (c *Client) PATCH(url string) (res Response, err error) {
 	}
 	req.Header.SetContentType(contentType)
 	req.SetBody(payload)
-	if err := fasthttp.Do(req, resp); err != nil {
-		return Response{}, err
+	if DefaultConfig.IsLog {
+		defer Log(req.URI().String(), payload, res, err)
 	}
-
+	if err = do(req, resp, c.Timeout); err != nil {
+		return
+	}
 	body := resp.Body()
 	status := resp.StatusCode()
 	res = Response{
@@ -197,9 +196,6 @@ func (c *Client) PUT(url string) (res Response, err error) {
 	defer fasthttp.ReleaseRequest(req)
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseResponse(resp) // 用完需要释放资源
-	if DefaultConfig.IsLog {
-		defer Log(req.URI().String(), []byte(``), res, err)
-	}
 	data := c.Data
 	contentType := "application/json"
 	var payload []byte
@@ -210,8 +206,11 @@ func (c *Client) PUT(url string) (res Response, err error) {
 	}
 	req.Header.SetContentType(contentType)
 	req.SetBody(payload)
-	if err := fasthttp.Do(req, resp); err != nil {
-		return Response{}, err
+	if DefaultConfig.IsLog {
+		defer Log(req.URI().String(), payload, res, err)
+	}
+	if err = do(req, resp, c.Timeout); err != nil {
+		return
 	}
 
 	body := resp.Body()
@@ -219,6 +218,16 @@ func (c *Client) PUT(url string) (res Response, err error) {
 	res = Response{
 		status,
 		body,
+	}
+	return
+}
+
+func do(req *fasthttp.Request, resp *fasthttp.Response, timeout time.Duration) (err error) {
+	fmt.Println("timeout>>",timeout)
+	if timeout > 0 {
+		err = fasthttp.DoTimeout(req, resp, timeout)
+	} else {
+		err = fasthttp.Do(req, resp)
 	}
 	return
 }
