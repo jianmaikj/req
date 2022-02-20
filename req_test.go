@@ -27,7 +27,7 @@ func Test(t *testing.T) {
 	//	"data1": 1,
 	//	"data2": 2,
 	//}
-	url := "https://baidu.com"
+	url := "https://www.baidu.com/test?i=9"
 	res, err := client.POST(url)
 	if err != nil {
 		return
