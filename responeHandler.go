@@ -1,5 +1,7 @@
 package req
 
+import "github.com/jianmaikj/convert"
+
 func (body Body) Map() (map[string]interface{}, error) {
 	var tempMap map[string]interface{}
 	if err := DefaultConfig.JSONDecoder(body, &tempMap); err != nil {
@@ -15,15 +17,15 @@ func (body Body) Struct(s interface{}) error {
 }
 
 func (body Body) String() string {
-	return string(body)
+	return convert.UnsafeString(body)
 }
 
-func (res Response) IsOk() bool {
+func (res *Response) IsOk() bool {
 	status := res.Status
 	return status == 200 || (status > 200 && status < 300)
 }
 
-func (res Response) Error(msg ...string) (err error) {
+func (res *Response) Error(msg ...string) (err error) {
 	if !res.IsOk() {
 		err = DefaultConfig.NotOkError
 	}
