@@ -147,15 +147,7 @@ func (c *Client) PATCH(url string) (res *Response, err error) {
 	req := c.NewReq(url, "PATCH")
 	resp := fasthttp.AcquireResponse()
 	var payload []byte
-	defer func() {
-		if DefaultConfig.IsLog {
-			Log(req.URI().String(), payload, res, err)
-		}
-		fasthttp.ReleaseResponse(resp) // 用完需要释放资源
-		fasthttp.ReleaseRequest(req)
-	}()
 	data := c.Data
-
 	contentType := "application/json"
 	if data != nil {
 		payload, _ = DefaultConfig.JSONEncoder(data)
@@ -164,9 +156,6 @@ func (c *Client) PATCH(url string) (res *Response, err error) {
 	}
 	req.Header.SetContentType(contentType)
 	req.SetBody(payload)
-	//if DefaultConfig.IsLog {
-	//	defer Log(req.URI().String(), payload, res, err)
-	//}
 	res, err = c.do(req, resp)
 	return
 }
