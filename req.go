@@ -112,12 +112,7 @@ func (c *Client) AddForm(k string, v interface{}) {
 
 func (c *Client) GET(url string) (res *Response, err error) {
 	req := c.NewReq(url, "GET")
-	defer fasthttp.ReleaseRequest(req)
 	resp := fasthttp.AcquireResponse()
-	defer fasthttp.ReleaseResponse(resp)
-	//if DefaultConfig.IsLog {
-	//	defer Log(req.URI().String(), []byte(``), res, err)
-	//}
 	res, err = c.do(req, resp)
 	return
 }
