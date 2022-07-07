@@ -3,6 +3,7 @@ package req
 import (
 	"github.com/jianmaikj/convert"
 	"github.com/valyala/fasthttp"
+	"reflect"
 )
 
 // Log uri:请求的完整路径,payload:请求负载,res:响应,err:请求错误,ErrNoFreeConns is returned if all DefaultMaxConnsPerHost connections to the requested host are busy.
@@ -22,4 +23,12 @@ func GetQueryString(params map[string]interface{}) []byte {
 	}
 	str := args.QueryString()
 	return str
+}
+
+func IsNil(v interface{}) bool {
+	vi := reflect.ValueOf(v)
+	if vi.Kind() == reflect.Ptr {
+		return vi.IsNil()
+	}
+	return false
 }
