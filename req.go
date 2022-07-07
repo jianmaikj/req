@@ -49,7 +49,9 @@ func (c *Client) NewReq(url string, method string) *fasthttp.Request {
 	req.SetRequestURI(url)
 	if params != nil {
 		for k, v := range params {
-			req.URI().QueryArgs().Add(k, convert.Str(v))
+			if v != nil {
+				req.URI().QueryArgs().Add(k, convert.Str(v))
+			}
 		}
 	}
 	if c.BasicAuth != nil {
