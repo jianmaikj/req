@@ -32,3 +32,22 @@ func IsNil(v interface{}) bool {
 	}
 	return false
 }
+
+func IsValuePtr(v reflect.Value) bool {
+	return v.Kind() == reflect.Ptr
+}
+
+func IsValueNil(v reflect.Value) bool {
+	if v.Kind() == reflect.Ptr {
+		return v.IsNil()
+	}
+	return false
+}
+
+func IsValueSlice(v reflect.Value) bool {
+	return v.Kind() == reflect.Slice
+}
+
+func IsValueArray(v reflect.Value) bool {
+	return v.Kind() == reflect.Array
+}

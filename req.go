@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/jianmaikj/convert"
 	"github.com/valyala/fasthttp"
+	"reflect"
 	"time"
 )
 
@@ -49,7 +50,20 @@ func (c *Client) NewReq(url string, method string) *fasthttp.Request {
 	req.SetRequestURI(url)
 	if params != nil {
 		for k, v := range params {
-			if !IsNil(v) {
+			value := reflect.ValueOf(v)
+			if IsValuePtr(value) {
+				if value.IsNil() {
+					continue
+				} else {
+					value = reflect.Indirect(value)
+				}
+			}
+			if IsValueSlice(value) || IsValueArray(value) {
+				for i := 0; i < value.Len(); i++ {
+					ele := value.Index(i).Interface()
+					req.URI().QueryArgs().Add(k, convert.Str(ele))
+				}
+			} else {
 				req.URI().QueryArgs().Add(k, convert.Str(v))
 			}
 		}
