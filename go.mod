@@ -3,7 +3,7 @@ module github.com/jianmaikj/req
 go 1.17
 
 require (
-	github.com/jianmaikj/convert v0.1.1
+	github.com/jianmaikj/convert v0.1.2
 	github.com/valyala/fasthttp v1.33.0
 )
 

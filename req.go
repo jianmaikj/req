@@ -60,11 +60,11 @@ func (c *Client) NewReq(url string, method string) *fasthttp.Request {
 			}
 			if IsValueSlice(value) || IsValueArray(value) {
 				for i := 0; i < value.Len(); i++ {
-					ele := value.Index(i).Interface()
-					req.URI().QueryArgs().Add(k, convert.Str(ele))
+					ele := value.Index(i)
+					req.URI().QueryArgs().Add(k, convert.ReflectValue2Str(ele))
 				}
 			} else {
-				req.URI().QueryArgs().Add(k, convert.Str(v))
+				req.URI().QueryArgs().Add(k, convert.ReflectValue2Str(value))
 			}
 		}
 	}
