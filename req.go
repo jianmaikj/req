@@ -2,8 +2,10 @@ package req
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/jianmaikj/convert"
 	"github.com/valyala/fasthttp"
+	"io"
 	"reflect"
 	"time"
 )
@@ -21,17 +23,19 @@ type Client struct {
 }
 
 type Config struct {
-	Params  map[string]interface{}
-	Form    map[string]interface{}
-	Data    interface{}
-	Json    json.RawMessage
-	Headers map[string]string
-	Timeout time.Duration
+	Params      map[string]interface{}
+	Form        map[string]interface{}
+	Data        interface{}
+	Json        json.RawMessage
+	Headers     map[string]string
+	Timeout     time.Duration
+	BodyWriteTo io.Writer
 }
 
 type Response struct {
 	Status int
 	Body
+	Header *fasthttp.ResponseHeader
 }
 
 func NewClient() *Client {
@@ -214,11 +218,22 @@ func (c *Client) do(req *fasthttp.Request, resp *fasthttp.Response) (res *Respon
 	if err != nil {
 		return
 	}
+	if c.BodyWriteTo != nil {
+		fmt.Println("c.BodyWriteTo:", c.BodyWriteTo)
+		err = resp.BodyWriteTo(c.BodyWriteTo)
+		if err != nil {
+			fmt.Println("BodyWriteTo err:", err)
+			return
+		}
+	}
 	body := resp.Body()
 	status := resp.StatusCode()
+	respHeaders := &fasthttp.ResponseHeader{}
+	resp.Header.CopyTo(respHeaders)
 	res = &Response{
 		status,
 		body,
+		respHeaders,
 	}
 	return
 }
