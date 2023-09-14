@@ -13,13 +13,14 @@ import (
 type Body []byte
 type Args = fasthttp.Args
 
+// var client = &fasthttp.Client{}
 type BasicAuth struct {
 	Username, Password string
 }
 
 type Client struct {
+	*fasthttp.Client
 	BasicAuth *BasicAuth
-	Config
 }
 
 type Config struct {
@@ -28,8 +29,16 @@ type Config struct {
 	Data        interface{}
 	Json        json.RawMessage
 	Headers     map[string]string
-	Timeout     time.Duration
+	Timeout     time.Duration //second
+	MaxRedirect int
+	GetHeaders  bool
 	BodyWriteTo io.Writer
+}
+
+type Req struct {
+	*fasthttp.Request
+	client *Client
+	config *Config
 }
 
 type Response struct {
@@ -39,7 +48,7 @@ type Response struct {
 }
 
 func NewClient() *Client {
-	return &Client{}
+	return &Client{&fasthttp.Client{}, nil}
 }
 
 type Reqs interface {
@@ -47,102 +56,119 @@ type Reqs interface {
 	GET() interface{}
 }
 
-func (c *Client) NewReq(url string, method string) *fasthttp.Request {
+func (c *Client) NewReq(url string, method string, config *Config) *Req {
 	req := fasthttp.AcquireRequest()
+
 	req.Header.SetMethod(method)
-	params := c.Params
 	req.SetRequestURI(url)
-	if params != nil {
-		for k, v := range params {
-			value := reflect.ValueOf(v)
-			if IsValuePtr(value) {
-				if value.IsNil() {
-					continue
-				} else {
-					value = reflect.Indirect(value)
-				}
-			}
-			if IsValueSlice(value) || IsValueArray(value) {
-				for i := 0; i < value.Len(); i++ {
-					ele := value.Index(i)
-					req.URI().QueryArgs().Add(k, convert.ReflectValue2Str(ele))
-				}
-			} else {
-				req.URI().QueryArgs().Add(k, convert.ReflectValue2Str(value))
-			}
-		}
+	r := &Req{
+		Request: req,
 	}
+	if config != nil {
+		if config.Headers != nil {
+			r.AppendHeaders(config.Headers)
+		}
+		params := config.Params
+		if params != nil {
+			r.AppendParams(params)
+		}
+		if config.Timeout > 0 {
+			req.SetTimeout(config.Timeout * time.Second)
+		}
+	} else {
+		config = &Config{}
+	}
+
 	if c.BasicAuth != nil {
 		req.URI().SetUsername(c.BasicAuth.Username)
 		req.URI().SetPassword(c.BasicAuth.Password)
 	}
-	return req
+	r.config = config
+	r.client = c
+	return r
 }
 
-func (c *Client) AppendHeaders(headers map[string]string) {
+func (r *Req) AppendHeaders(headers map[string]string) *Req {
 	if len(headers) == 0 {
-		return
+		return r
 	}
 	for k, v := range headers {
-		c.Headers[k] = v
+		r.Header.Add(k, v)
 	}
-	return
+	return r
 }
-func (c *Client) AddHeaders(k, v string) {
+func (r *Req) AddHeader(k, v string) *Req {
 	if k == "" {
-		return
+		return r
 	}
-	c.Headers[k] = v
-	return
+	r.Header.Add(k, v)
+	return r
 }
 
-func (c *Client) AppendParams(params map[string]interface{}) {
+func (r *Req) AppendParams(params map[string]interface{}) *Req {
 	if len(params) == 0 {
-		return
+		return r
 	}
 	for k, v := range params {
-		c.Params[k] = v
+		value := reflect.ValueOf(v)
+		if IsValuePtr(value) {
+			if value.IsNil() {
+				continue
+			} else {
+				value = reflect.Indirect(value)
+			}
+		}
+		if IsValueSlice(value) || IsValueArray(value) {
+			for i := 0; i < value.Len(); i++ {
+				ele := value.Index(i)
+				r.URI().QueryArgs().Add(k, convert.ReflectValue2Str(ele))
+			}
+		} else {
+			r.URI().QueryArgs().Add(k, convert.ReflectValue2Str(value))
+		}
 	}
-	return
+	//r.AppendParams(params)
+	return r
 }
-func (c *Client) AddParams(k string, v interface{}) {
+func (r *Req) AddParam(k string, v interface{}) *Req {
 	if k == "" {
-		return
+		return r
 	}
-	c.Params[k] = v
-	return
+	r.URI().QueryArgs().Add(k, convert.Str(reflect.ValueOf(v)))
+	return r
 }
 
-func (c *Client) AppendForm(form map[string]interface{}) {
+func (r *Req) AppendForms(form map[string]interface{}) *Req {
 	if len(form) == 0 {
-		return
+		return r
 	}
 	for k, v := range form {
-		c.Form[k] = v
+		r.PostArgs().Add(k, convert.Str(reflect.ValueOf(v)))
 	}
-	return
+	return r
 }
-func (c *Client) AddForm(k string, v interface{}) {
+func (r *Req) AddForm(k string, v interface{}) *Req {
 	if k == "" {
-		return
+		return r
 	}
-	c.Form[k] = v
+	r.PostArgs().Add(k, convert.Str(reflect.ValueOf(v)))
+	return r
+}
+
+func (c *Client) GET(url string, config ...*Config) (req *Req) {
+	var cfg *Config
+	if len(config) > 0 {
+		cfg = config[0]
+	}
+	req = c.NewReq(url, "GET", cfg)
 	return
 }
 
-func (c *Client) GET(url string) (res *Response, err error) {
-	req := c.NewReq(url, "GET")
-	resp := fasthttp.AcquireResponse()
-	res, err = c.do(req, resp)
-	return
-}
-
-func (c *Client) POST(url string) (res *Response, err error) {
-	req := c.NewReq(url, "POST")
-	resp := fasthttp.AcquireResponse()
+func (c *Client) POST(url string, config *Config) (r *Req) {
+	r = c.NewReq(url, "POST", config)
 	var payload []byte
-	form := c.Form
-	data := c.Data
+	form := config.Form
+	data := config.Data
 	contentType := "application/json"
 	if form != nil {
 		contentType = "application/x-www-form-urlencoded"
@@ -150,52 +176,46 @@ func (c *Client) POST(url string) (res *Response, err error) {
 	} else if data != nil {
 		payload, _ = DefaultConfig.JSONEncoder(data)
 	} else {
-		payload = c.Json
+		payload = config.Json
 	}
-	req.Header.SetContentType(contentType)
-	req.SetBody(payload)
-	res, err = c.do(req, resp)
+	r.Header.SetContentType(contentType)
+	r.SetBody(payload)
 	return
 }
 
-func (c *Client) PATCH(url string) (res *Response, err error) {
-	req := c.NewReq(url, "PATCH")
-	resp := fasthttp.AcquireResponse()
+func (c *Client) PATCH(url string, config *Config) (r *Req) {
+	r = c.NewReq(url, "PATCH", config)
 	var payload []byte
-	data := c.Data
+	data := config.Data
 	contentType := "application/json"
 	if data != nil {
 		payload, _ = DefaultConfig.JSONEncoder(data)
 	} else {
-		payload = c.Json
+		payload = config.Json
 	}
-	req.Header.SetContentType(contentType)
-	req.SetBody(payload)
-	res, err = c.do(req, resp)
+	r.Header.SetContentType(contentType)
+	r.SetBody(payload)
 	return
 }
 
-func (c *Client) PUT(url string) (res *Response, err error) {
-	req := c.NewReq(url, "PUT")
-	resp := fasthttp.AcquireResponse()
-	data := c.Data
+func (c *Client) PUT(url string, config *Config) (r *Req) {
+	r = c.NewReq(url, "PUT", config)
+	data := config.Data
 	contentType := "application/json"
 	var payload []byte
 	if data != nil {
 		payload, _ = DefaultConfig.JSONEncoder(data)
 	} else {
-		payload = c.Json
+		payload = config.Json
 	}
-	req.Header.SetContentType(contentType)
-	req.SetBody(payload)
-	//if DefaultConfig.IsLog {
-	//	defer Log(req.URI().String(), payload, res, err)
-	//}
-	res, err = c.do(req, resp)
+	r.Header.SetContentType(contentType)
+	r.SetBody(payload)
 	return
 }
 
-func (c *Client) do(req *fasthttp.Request, resp *fasthttp.Response) (res *Response, err error) {
+func (r *Req) Do() (res *Response, err error) {
+	resp := fasthttp.AcquireResponse()
+	req := r.Request
 	defer func() {
 		if DefaultConfig.IsLog {
 			Log(req.URI().String(), req.Body(), res, err)
@@ -203,24 +223,20 @@ func (c *Client) do(req *fasthttp.Request, resp *fasthttp.Response) (res *Respon
 		fasthttp.ReleaseResponse(resp) // 用完需要释放资源
 		fasthttp.ReleaseRequest(req)
 	}()
-
-	headers := c.Headers
-	if headers != nil {
-		for k, v := range headers {
-			req.Header.Set(k, v)
-		}
-	}
-	if c.Timeout > 0 {
-		err = fasthttp.DoTimeout(req, resp, c.Timeout)
+	c := r.client
+	config := r.config
+	if config.MaxRedirect != 0 {
+		err = c.DoRedirects(req, resp, config.MaxRedirect)
 	} else {
-		err = fasthttp.Do(req, resp)
+		err = c.Do(req, resp)
 	}
 	if err != nil {
+		fmt.Println("err:", err)
 		return
 	}
-	if c.BodyWriteTo != nil {
-		fmt.Println("c.BodyWriteTo:", c.BodyWriteTo)
-		err = resp.BodyWriteTo(c.BodyWriteTo)
+	if config.BodyWriteTo != nil {
+		fmt.Println("c.BodyWriteTo:", config.BodyWriteTo)
+		err = resp.BodyWriteTo(config.BodyWriteTo)
 		if err != nil {
 			fmt.Println("BodyWriteTo err:", err)
 			return
@@ -228,8 +244,12 @@ func (c *Client) do(req *fasthttp.Request, resp *fasthttp.Response) (res *Respon
 	}
 	body := resp.Body()
 	status := resp.StatusCode()
-	respHeaders := &fasthttp.ResponseHeader{}
-	resp.Header.CopyTo(respHeaders)
+
+	var respHeaders *fasthttp.ResponseHeader
+	if config.GetHeaders {
+		respHeaders = &fasthttp.ResponseHeader{}
+		resp.Header.CopyTo(respHeaders)
+	}
 	res = &Response{
 		status,
 		body,
