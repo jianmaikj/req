@@ -6,7 +6,7 @@ A lightweight high-performance request library based on fasthttp
 // direct request
 client := req.NewClient()
 url := "https://baidu.com"
-res, err := client.GET(url)
+res, err := client.GET(url).Do()
 if err != nil {
     return
 }
@@ -14,7 +14,7 @@ fmt.Println(res.Body)
 
 // request with query or body
 client := req.NewClient()
-client.Config = req.Config{
+cfg := &req.Config{
     Params: map[string]interface{}{
     "q1": 1,
     "q2": 2,
@@ -23,9 +23,11 @@ client.Config = req.Config{
     "data1": 1,
     "data2": 2,
     },
+	Timeout: 10, // second
+	GetHeaders: true,
 }
 url := "https://api.xxx.com"
-res, err := client.POST(url)
+res, err := client.POST(url, cfg).Do()
 if err != nil {
     return
 }
