@@ -20,7 +20,28 @@ type BasicAuth struct {
 
 type Client struct {
 	*fasthttp.Client
+	ClientConfig *ClientConfig
+}
+type ClientConfig struct {
 	BasicAuth *BasicAuth
+	Headers   map[string]string
+	BasicUrl  string
+	Timeout   time.Duration //second
+}
+
+func (c *Client) SetBasicAuth(Username, Password string) {
+	c.ClientConfig.BasicAuth = &BasicAuth{Username, Password}
+}
+func (c *Client) SetHeaders(headers map[string]string) {
+	c.ClientConfig.Headers = headers
+}
+
+func (c *Client) SetBasicUrl(url string) {
+	c.ClientConfig.BasicUrl = url
+}
+
+func (c *Client) SetTimeout(timeout time.Duration) {
+	c.ClientConfig.Timeout = timeout
 }
 
 type Config struct {
@@ -47,8 +68,12 @@ type Response struct {
 	Header *fasthttp.ResponseHeader
 }
 
-func NewClient() *Client {
-	return &Client{&fasthttp.Client{}, nil}
+func NewClient(configs ...*ClientConfig) *Client {
+	config := &ClientConfig{}
+	if len(configs) > 0 {
+		config = configs[0]
+	}
+	return &Client{&fasthttp.Client{}, config}
 }
 
 type Reqs interface {
@@ -60,17 +85,30 @@ func (c *Client) NewReq(url string, method string, config *Config) *Req {
 	req := fasthttp.AcquireRequest()
 
 	req.Header.SetMethod(method)
-	req.SetRequestURI(url)
+	cConfig := c.ClientConfig
+	req.SetRequestURI(cConfig.BasicUrl + url)
 	r := &Req{
 		Request: req,
 	}
+
+	if cConfig.BasicAuth != nil {
+		req.URI().SetUsername(c.ClientConfig.BasicAuth.Username)
+		req.URI().SetPassword(c.ClientConfig.BasicAuth.Password)
+	}
+	if len(cConfig.Headers) > 0 {
+		r.SetHeaders(cConfig.Headers)
+	}
+	if cConfig.Timeout > 0 {
+		req.SetTimeout(cConfig.Timeout * time.Second)
+	}
+
 	if config != nil {
 		if config.Headers != nil {
-			r.AppendHeaders(config.Headers)
+			r.SetHeaders(config.Headers)
 		}
 		params := config.Params
 		if params != nil {
-			r.AppendParams(params)
+			r.AddParams(params)
 		}
 		if config.Timeout > 0 {
 			req.SetTimeout(config.Timeout * time.Second)
@@ -79,16 +117,19 @@ func (c *Client) NewReq(url string, method string, config *Config) *Req {
 		config = &Config{}
 	}
 
-	if c.BasicAuth != nil {
-		req.URI().SetUsername(c.BasicAuth.Username)
-		req.URI().SetPassword(c.BasicAuth.Password)
-	}
 	r.config = config
 	r.client = c
 	return r
 }
 
-func (r *Req) AppendHeaders(headers map[string]string) *Req {
+func (r *Req) AddHeader(k, v string) *Req {
+	if k == "" {
+		return r
+	}
+	r.Header.Add(k, v)
+	return r
+}
+func (r *Req) AddHeaders(headers map[string]string) *Req {
 	if len(headers) == 0 {
 		return r
 	}
@@ -97,15 +138,24 @@ func (r *Req) AppendHeaders(headers map[string]string) *Req {
 	}
 	return r
 }
-func (r *Req) AddHeader(k, v string) *Req {
+func (r *Req) SetHeader(k, v string) *Req {
 	if k == "" {
 		return r
 	}
-	r.Header.Add(k, v)
+	r.Header.Set(k, v)
+	return r
+}
+func (r *Req) SetHeaders(headers map[string]string) *Req {
+	if len(headers) == 0 {
+		return r
+	}
+	for k, v := range headers {
+		r.Header.Set(k, v)
+	}
 	return r
 }
 
-func (r *Req) AppendParams(params map[string]interface{}) *Req {
+func (r *Req) AddParams(params map[string]interface{}) *Req {
 	if len(params) == 0 {
 		return r
 	}
@@ -138,7 +188,7 @@ func (r *Req) AddParam(k string, v interface{}) *Req {
 	return r
 }
 
-func (r *Req) AppendForms(form map[string]interface{}) *Req {
+func (r *Req) AddForms(form map[string]interface{}) *Req {
 	if len(form) == 0 {
 		return r
 	}

@@ -3,7 +3,6 @@ package req
 import (
 	"fmt"
 	"testing"
-	"time"
 )
 
 func Test(t *testing.T) {
@@ -11,7 +10,8 @@ func Test(t *testing.T) {
 	DefaultConfig.IsLog = true
 
 	client := NewClient()
-	client.Config = Config{
+	url := "https://www.baidu.com/test?i=9"
+	res, err := client.POST(url, &Config{
 		Params: map[string]interface{}{
 			"q1": 1,
 			"q2": 2,
@@ -20,15 +20,8 @@ func Test(t *testing.T) {
 			"data1": 1,
 			"data2": 2,
 		},
-		Timeout: 30 * time.Second,
-	}
-
-	//client.Data = map[string]interface{}{
-	//	"data1": 1,
-	//	"data2": 2,
-	//}
-	url := "https://www.baidu.com/test?i=9"
-	res, err := client.POST(url)
+		Timeout: 30,
+	}).Do()
 	if err != nil {
 		return
 	}
