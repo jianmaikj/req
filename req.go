@@ -2,6 +2,7 @@ package req
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/jianmaikj/convert"
 	"github.com/valyala/fasthttp"
@@ -9,6 +10,15 @@ import (
 	"reflect"
 	"time"
 )
+
+type TimeoutError struct{}
+
+func (e *TimeoutError) Error() string {
+	return "request timeout"
+}
+
+// ErrTimeout is returned from timed out calls.
+var ErrTimeout = &TimeoutError{}
 
 type Body []byte
 type Args = fasthttp.Args
@@ -305,7 +315,9 @@ func (r *Req) Do() (res *Response, err error) {
 		err = c.Do(req, resp)
 	}
 	if err != nil {
-		fmt.Println("err:", err)
+		if errors.Is(err, fasthttp.ErrTimeout) {
+			err = ErrTimeout
+		}
 		return
 	}
 	if config.BodyWriteTo != nil {
