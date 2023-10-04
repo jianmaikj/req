@@ -248,6 +248,30 @@ func (c *Client) PATCH(url string, config *Config) (r *Req) {
 	return
 }
 
+func (c *Client) DELETE(url string, config ...*Config) (r *Req) {
+	var cfg *Config
+	if len(config) > 0 {
+		cfg = config[0]
+	}
+	r = c.NewReq(url, "DELETE", cfg)
+	if cfg != nil {
+		var payload []byte
+		data := cfg.Data
+		if data != nil {
+			contentType := "application/json"
+			payload, _ = DefaultConfig.JSONEncoder(data)
+			r.Header.SetContentType(contentType)
+			r.SetBody(payload)
+		} else {
+			contentType := "application/json"
+			payload = cfg.Json
+			r.Header.SetContentType(contentType)
+			r.SetBody(payload)
+		}
+	}
+	return
+}
+
 func (c *Client) PUT(url string, config *Config) (r *Req) {
 	r = c.NewReq(url, "PUT", config)
 	data := config.Data
